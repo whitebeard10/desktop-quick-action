@@ -60,7 +60,7 @@ export const ActionPanel: React.FC = () => {
           WebkitBackdropFilter: `blur(${theme.blurIntensity}px)`,
           boxShadow: theme.shadowDepth,
         }}
-        className="fixed top-12 right-12 z-[9990] w-[460px] rounded-3xl border p-4 text-slate-100 flex flex-col gap-3 overflow-hidden shadow-2xl"
+        className="relative z-[9990] w-full max-w-[460px] mx-auto rounded-3xl border p-4 text-slate-100 flex flex-col gap-3 overflow-hidden shadow-2xl"
       >
         {/* Header Bar */}
         <div className="flex items-center justify-between border-b border-white/10 pb-3">

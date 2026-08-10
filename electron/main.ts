@@ -2,12 +2,15 @@ import { app, BrowserWindow, ipcMain, globalShortcut, shell, Tray, Menu, nativeI
 import path from 'path';
 import os from 'os';
 import zlib from 'zlib';
+import fs from 'fs';
 
 // Work around GPU process crashes on some Windows systems (exit_code=-1073741819 / 0xC0000005).
 // --disable-gpu forces software rendering, which is required for transparent windows
 // on systems where the GPU process crashes.
 app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('enable-transparent-visuals');
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+app.commandLine.appendSwitch('disable-http-cache');
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -116,9 +119,19 @@ function toggleWindowVisibility() {
 }
 
 function createWindow() {
+  const possiblePreloadPaths = [
+    path.join(__dirname, '../preload/preload.mjs'),
+    path.join(__dirname, 'preload.mjs'),
+    path.join(__dirname, 'preload.cjs'),
+    path.join(__dirname, 'preload.js'),
+    path.join(app.getAppPath(), 'out/preload/preload.mjs'),
+    path.join(app.getAppPath(), 'dist-electron/preload.cjs'),
+  ];
+  const preloadPath = possiblePreloadPaths.find((p) => fs.existsSync(p));
+
   mainWindow = new BrowserWindow({
-    width: 450,
-    height: 700,
+    width: 500,
+    height: 720,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -126,7 +139,7 @@ function createWindow() {
     skipTaskbar: false,
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/preload.mjs'),
+      preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
     },
@@ -138,7 +151,19 @@ function createWindow() {
   if (devServerUrl) {
     mainWindow.loadURL(devServerUrl);
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../../dist/index.html'));
+    const possibleHtmlPaths = [
+      path.join(__dirname, '../renderer/index.html'),
+      path.join(__dirname, '../../dist/index.html'),
+      path.join(__dirname, '../dist/index.html'),
+      path.join(app.getAppPath(), 'out/renderer/index.html'),
+      path.join(app.getAppPath(), 'dist/index.html'),
+    ];
+    const htmlPath = possibleHtmlPaths.find((p) => fs.existsSync(p));
+    if (htmlPath) {
+      mainWindow.loadFile(htmlPath);
+    } else {
+      console.error('[Window] Could not find index.html to load! Checked:', possibleHtmlPaths);
+    }
   }
 
   // Show window once content is painted — with a timeout fallback
@@ -149,9 +174,10 @@ function createWindow() {
     shown = true;
     mainWindow.show();
     mainWindow.focus();
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
   };
   mainWindow.once('ready-to-show', showWindow);
-  setTimeout(showWindow, 3000); // fallback: force show after 3s
+  setTimeout(showWindow, 1000); // fallback: force show after 1s
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     console.error('[Window] Renderer crashed:', details.reason, details.exitCode);

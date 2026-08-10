@@ -11,7 +11,7 @@ export const App: React.FC = () => {
   }, [initEngines]);
 
   return (
-    <div className="w-screen h-screen overflow-hidden bg-transparent select-none">
+    <div className="w-screen h-screen overflow-hidden bg-transparent select-none p-3 flex items-center justify-center">
       <FloatingBubble />
       <ActionPanel />
     </div>
