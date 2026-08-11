@@ -44,11 +44,25 @@ export const FloatingBubble: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  const isElectron = Boolean((window as any).electronAPI);
+
+  const handleDrag = (_: any, info: any) => {
+    if (isElectron) {
+      windowManager.moveDelta(info.delta.x, info.delta.y);
+      setPos(windowManager.getPosition());
+    }
+  };
+
   const handleDragEnd = (_: any, info: any) => {
-    const newX = pos.x + info.offset.x;
-    const newY = pos.y + info.offset.y;
-    windowManager.setPosition({ x: newX, y: newY }, settings.snapToEdge);
-    setPos(windowManager.getPosition());
+    if (!isElectron) {
+      const newX = pos.x + info.offset.x;
+      const newY = pos.y + info.offset.y;
+      windowManager.setPosition({ x: newX, y: newY }, settings.snapToEdge);
+      setPos(windowManager.getPosition());
+    } else {
+      windowManager.setPosition(windowManager.getPosition(), settings.snapToEdge);
+      setPos(windowManager.getPosition());
+    }
   };
 
   const currentOpacity = isHovered 
@@ -61,6 +75,7 @@ export const FloatingBubble: React.FC = () => {
     <motion.div
       drag
       dragMomentum={false}
+      onDrag={handleDrag}
       onDragEnd={handleDragEnd}
       onHoverStart={() => {
         setIsHovered(true);
@@ -71,12 +86,11 @@ export const FloatingBubble: React.FC = () => {
         if (!isPanelOpen) bubbleFSM.transitionTo('idle');
       }}
       style={{
-        position: 'fixed',
-        left: pos.x,
-        top: pos.y,
+        position: 'relative',
         zIndex: 9999,
         touchAction: 'none',
-      }}
+        WebkitAppRegion: isElectron ? 'drag' : undefined,
+      } as React.CSSProperties}
       animate={{
         scale: isHovered ? 1.08 : 1.0,
         opacity: currentOpacity,
@@ -94,7 +108,8 @@ export const FloatingBubble: React.FC = () => {
           backdropFilter: `blur(${theme.blurIntensity}px)`,
           WebkitBackdropFilter: `blur(${theme.blurIntensity}px)`,
           boxShadow: isHovered ? `0 0 25px ${theme.accentGlow}` : theme.shadowDepth,
-        }}
+          WebkitAppRegion: isElectron ? 'no-drag' : undefined,
+        } as React.CSSProperties}
         className="relative flex items-center justify-center border transition-all duration-200 cursor-grab active:cursor-grabbing group outline-none"
         title="Desktop Action Hub (Click to Toggle / Drag to Move)"
       >

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, globalShortcut, shell, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, globalShortcut, shell, Tray, Menu, nativeImage, screen } from 'electron';
 import path from 'path';
 import os from 'os';
 import zlib from 'zlib';
@@ -129,9 +129,16 @@ function createWindow() {
   ];
   const preloadPath = possiblePreloadPaths.find((p) => fs.existsSync(p));
 
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+  const defaultX = Math.max(0, screenWidth - 100);
+  const defaultY = Math.max(0, Math.floor(screenHeight / 2 - 40));
+
   mainWindow = new BrowserWindow({
-    width: 500,
-    height: 720,
+    x: defaultX,
+    y: defaultY,
+    width: 80,
+    height: 80,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -253,8 +260,31 @@ ipcMain.handle('system:metrics', async () => {
   };
 });
 
+ipcMain.handle('system:screen-bounds', () => {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.workAreaSize;
+  return { width, height };
+});
+
+ipcMain.handle('window:get-position', () => {
+  if (!mainWindow) return { x: 0, y: 0 };
+  const [x, y] = mainWindow.getPosition();
+  return { x, y };
+});
+
+ipcMain.handle('window:move-delta', (_: any, deltaX: number, deltaY: number) => {
+  if (!mainWindow) return;
+  const [x, y] = mainWindow.getPosition();
+  mainWindow.setPosition(Math.round(x + deltaX), Math.round(y + deltaY));
+});
+
 ipcMain.handle('window:move', (_: any, x: number, y: number) => {
   mainWindow?.setPosition(Math.round(x), Math.round(y));
+});
+
+ipcMain.handle('window:set-size', (_: any, width: number, height: number) => {
+  if (!mainWindow) return;
+  mainWindow.setSize(Math.round(width), Math.round(height));
 });
 
 ipcMain.handle('window:minimize', () => { mainWindow?.minimize(); });

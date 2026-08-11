@@ -336,6 +336,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const nextState = override !== undefined ? override : !get().isPanelOpen;
     set({ isPanelOpen: nextState });
 
+    windowManager.setPanelOpen(nextState);
+
     if (nextState) {
       bubbleFSM.transitionTo('expanded');
     } else {

@@ -4,14 +4,14 @@ import { ActionPanel } from './components/panel/ActionPanel';
 import { useAppStore } from './store/useAppStore';
 
 export const App: React.FC = () => {
-  const { initEngines, theme } = useAppStore();
+  const { initEngines } = useAppStore();
 
   useEffect(() => {
     initEngines();
   }, [initEngines]);
 
   return (
-    <div className="w-screen h-screen overflow-hidden bg-transparent select-none p-3 flex items-center justify-center">
+    <div className="w-full h-full min-h-screen bg-transparent select-none p-3 flex flex-col items-center justify-start gap-3 overflow-hidden">
       <FloatingBubble />
       <ActionPanel />
     </div>

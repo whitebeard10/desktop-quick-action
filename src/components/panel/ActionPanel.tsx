@@ -63,17 +63,28 @@ export const ActionPanel: React.FC = () => {
         className="relative z-[9990] w-full max-w-[460px] mx-auto rounded-3xl border p-4 text-slate-100 flex flex-col gap-3 overflow-hidden shadow-2xl"
       >
         {/* Header Bar */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <div
+          className="flex items-center justify-between border-b border-white/10 pb-3 cursor-grab active:cursor-grabbing"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        >
           <div className="flex items-center gap-2">
             <span
               className="px-2.5 py-1 rounded-full text-xs font-extrabold flex items-center gap-1.5 shadow"
-              style={{ backgroundColor: `${activeProfile.accentColor}33`, color: activeProfile.accentColor, border: `1px solid ${activeProfile.accentColor}55` }}
+              style={{
+                backgroundColor: `${activeProfile.accentColor}33`,
+                color: activeProfile.accentColor,
+                border: `1px solid ${activeProfile.accentColor}55`,
+                WebkitAppRegion: 'no-drag',
+              } as React.CSSProperties}
             >
               {activeProfile.name}
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div
+            className="flex items-center gap-1.5"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
             {/* Notification Drawer Toggle */}
             <button
               onClick={() => {
