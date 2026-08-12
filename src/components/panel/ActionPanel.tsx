@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Rocket, 
@@ -26,8 +26,14 @@ import { ThemeCustomizer } from '../themes/ThemeCustomizer';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { actionEngine } from '@core/action-engine';
 import { springPresets } from '@core/animation-system';
+import { windowManager } from '@core/window-manager';
+import { eventBus } from '@core/event-bus';
 
 export type PanelTab = 'launcher' | 'widgets' | 'search' | 'profiles' | 'themes' | 'settings';
+
+const PANEL_W = 460;
+const PANEL_H = 680;
+const GAP = 8; // gap between bubble and panel
 
 export const ActionPanel: React.FC = () => {
   const { 
@@ -38,11 +44,31 @@ export const ActionPanel: React.FC = () => {
     notifications, 
     unreadNotificationCount, 
     markNotificationsRead, 
-    clearNotifications 
+    clearNotifications,
+    settings,
   } = useAppStore();
 
   const [activeTab, setActiveTab] = useState<PanelTab>('launcher');
   const [showNotifications, setShowNotifications] = useState(false);
+  const [bubblePos, setBubblePos] = useState(windowManager.getPosition());
+
+  const isElectron = Boolean((window as any).electronAPI);
+
+  useEffect(() => {
+    const handler = (pos: { x: number; y: number }) => setBubblePos({ ...pos });
+    eventBus.on('WINDOW_POSITION_CHANGED', handler);
+    return () => eventBus.off('WINDOW_POSITION_CHANGED', handler);
+  }, []);
+
+  // Smart placement: open panel to the left of bubble if near right edge, else right
+  const screenBounds = windowManager.getScreenBounds();
+  const bubbleSize = settings.bubbleSize;
+  const spaceRight = screenBounds.width - (bubblePos.x + bubbleSize);
+  const panelX = spaceRight >= PANEL_W + GAP
+    ? bubblePos.x + bubbleSize + GAP
+    : Math.max(0, bubblePos.x - PANEL_W - GAP);
+  // Vertically align panel top with bubble, clamp to screen
+  const panelY = Math.min(bubblePos.y, Math.max(0, screenBounds.height - PANEL_H - GAP));
 
   if (!isPanelOpen) return null;
 
@@ -54,13 +80,20 @@ export const ActionPanel: React.FC = () => {
         exit={{ opacity: 0, scale: 0.92, y: 10 }}
         transition={springPresets.snappy}
         style={{
+          position: 'fixed',
+          left: panelX,
+          top: panelY,
+          width: PANEL_W,
+          maxHeight: PANEL_H,
+          zIndex: 9990,
+          pointerEvents: 'auto',
           backgroundColor: theme.bgGlass,
           borderColor: theme.borderGlass,
           backdropFilter: `blur(${theme.blurIntensity}px)`,
           WebkitBackdropFilter: `blur(${theme.blurIntensity}px)`,
           boxShadow: theme.shadowDepth,
         }}
-        className="relative z-[9990] w-full max-w-[460px] mx-auto rounded-3xl border p-4 text-slate-100 flex flex-col gap-3 overflow-hidden shadow-2xl"
+        className="relative rounded-3xl border p-4 text-slate-100 flex flex-col gap-3 overflow-hidden shadow-2xl"
       >
         {/* Header Bar */}
         <div

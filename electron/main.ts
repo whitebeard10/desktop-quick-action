@@ -131,19 +131,17 @@ function createWindow() {
 
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-  const defaultX = Math.max(0, screenWidth - 100);
-  const defaultY = Math.max(0, Math.floor(screenHeight / 2 - 40));
 
   mainWindow = new BrowserWindow({
-    x: defaultX,
-    y: defaultY,
-    width: 80,
-    height: 80,
+    x: 0,
+    y: 0,
+    width: screenWidth,
+    height: screenHeight,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    resizable: true,
-    skipTaskbar: false,
+    resizable: false,
+    skipTaskbar: true,
     show: false,
     webPreferences: {
       preload: preloadPath,
@@ -174,6 +172,45 @@ function createWindow() {
   }
 
   // Show window once content is painted — with a timeout fallback
+  // Track whether pass-through is currently enabled to avoid redundant calls
+  let ignoreMouseEvents = true;
+  let panelOpen = false;
+
+  const applyIgnore = (ignore: boolean) => {
+    if (ignore === ignoreMouseEvents || !mainWindow) return;
+    ignoreMouseEvents = ignore;
+    if (ignore) {
+      mainWindow.setIgnoreMouseEvents(true, { forward: true });
+    } else {
+      mainWindow.setIgnoreMouseEvents(false);
+    }
+  };
+
+  // cursor-changed fires in the MAIN PROCESS whenever Chromium changes cursor style.
+  // This is synchronous relative to mouse processing — no IPC round-trip race condition.
+  // Bubble has cursor:grab, panel buttons have cursor:pointer.
+  // Transparent overlay has cursor:default → re-enable pass-through.
+  mainWindow.webContents.on('cursor-changed', (_event, type) => {
+    if (panelOpen) {
+      // Panel is open: full interaction mode regardless of cursor
+      applyIgnore(false);
+      return;
+    }
+    // Any non-default/non-none cursor means we're over an interactive element
+    const interactive = type !== 'default' && type !== 'none';
+    applyIgnore(!interactive);
+  });
+
+  // Track panel state so cursor:default elements inside the panel don't re-enable pass-through
+  ipcMain.on('panel:state-changed', (_event, open: boolean) => {
+    panelOpen = open;
+    if (open) {
+      applyIgnore(false);
+    } else {
+      applyIgnore(true);
+    }
+  });
+
   // in case GPU issues prevent 'ready-to-show' from firing.
   let shown = false;
   const showWindow = () => {
@@ -182,6 +219,8 @@ function createWindow() {
     mainWindow.show();
     mainWindow.focus();
     mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    // Start as click-through; cursor-changed will disable pass-through over the bubble
+    mainWindow.setIgnoreMouseEvents(true, { forward: true });
   };
   mainWindow.once('ready-to-show', showWindow);
   setTimeout(showWindow, 1000); // fallback: force show after 1s
@@ -267,24 +306,20 @@ ipcMain.handle('system:screen-bounds', () => {
 });
 
 ipcMain.handle('window:get-position', () => {
-  if (!mainWindow) return { x: 0, y: 0 };
-  const [x, y] = mainWindow.getPosition();
-  return { x, y };
+  // Now returns screen bounds so renderer can calculate initial bubble position
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.workAreaSize;
+  return { screenWidth: width, screenHeight: height };
 });
 
-ipcMain.handle('window:move-delta', (_: any, deltaX: number, deltaY: number) => {
+// Renderer calls this when mouse enters/leaves the bubble or panel
+ipcMain.on('window:set-ignore-mouse-events', (_: any, ignore: boolean) => {
   if (!mainWindow) return;
-  const [x, y] = mainWindow.getPosition();
-  mainWindow.setPosition(Math.round(x + deltaX), Math.round(y + deltaY));
-});
-
-ipcMain.handle('window:move', (_: any, x: number, y: number) => {
-  mainWindow?.setPosition(Math.round(x), Math.round(y));
-});
-
-ipcMain.handle('window:set-size', (_: any, width: number, height: number) => {
-  if (!mainWindow) return;
-  mainWindow.setSize(Math.round(width), Math.round(height));
+  if (ignore) {
+    mainWindow.setIgnoreMouseEvents(true, { forward: true });
+  } else {
+    mainWindow.setIgnoreMouseEvents(false);
+  }
 });
 
 ipcMain.handle('window:minimize', () => { mainWindow?.minimize(); });

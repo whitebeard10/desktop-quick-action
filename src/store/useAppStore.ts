@@ -338,6 +338,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     windowManager.setPanelOpen(nextState);
 
+    // Notify main process: panel open = disable pass-through even on cursor:default elements
+    if ((window as any).electronAPI?.setPanelOpen) {
+      (window as any).electronAPI.setPanelOpen(nextState);
+    }
+
     if (nextState) {
       bubbleFSM.transitionTo('expanded');
     } else {
