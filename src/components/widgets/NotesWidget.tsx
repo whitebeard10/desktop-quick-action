@@ -7,14 +7,17 @@ export const NotesWidget: React.FC = () => {
   const { activeProfile, theme } = useAppStore();
   const storageKey = `notes_${activeProfile.id}`;
 
-  const [note, setNote] = useState<string>(
-    repository.getItem(storageKey, '• Meeting at 3 PM\n• Review PRD section 11 architecture\n• Deploy Desktop Action Hub v1.0')
+  // Load from storage once on mount; empty string is the default (no fake placeholder)
+  const [note, setNote] = useState<string>(() =>
+    repository.getItem<string>(storageKey, '')
   );
   const [isSaved, setIsSaved] = useState(false);
 
+  // When the active profile changes, reload the note for that profile
   useEffect(() => {
-    setNote(repository.getItem(storageKey, ''));
+    setNote(repository.getItem<string>(`notes_${activeProfile.id}`, ''));
   }, [activeProfile.id]);
+
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
