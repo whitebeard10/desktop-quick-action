@@ -42,3 +42,8 @@ pnpm-debug.log*
 HANDOVER.md
 *.handover.md
 
+# Local-only / debug / orphaned files
+test-window.cjs
+tsconfig.electron.json
+vite.config.ts
+
