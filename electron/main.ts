@@ -249,11 +249,77 @@ app.on('will-quit', () => { globalShortcut.unregisterAll(); });
 
 ipcMain.handle('app:launch', async (_: any, pathOrExe: string) => {
   try {
-    if (pathOrExe.startsWith('http')) {
+    const { exec } = await import('child_process');
+
+    if (pathOrExe === 'mute_audio') {
+      exec('powershell -c "(New-Object -ComObject WScript.Shell).SendKeys([char]173)"');
+      return { success: true };
+    }
+    if (pathOrExe === 'lock_system') {
+      exec('rundll32.exe user32.dll,LockWorkStation');
+      return { success: true };
+    }
+    if (pathOrExe === 'take_screenshot') {
+      try {
+        await shell.openExternal('ms-screenclip:');
+      } catch (_) {
+        exec('snippingtool.exe');
+      }
+      return { success: true };
+    }
+
+    // Smart aliases for common Windows applications
+    const localAppData = process.env['LOCALAPPDATA'] || '';
+    const appAliases: Record<string, string[]> = {
+      'discord': [
+        path.join(localAppData, 'Discord', 'Update.exe') + ' --processStart Discord.exe',
+        'discord://',
+        'https://discord.com/app',
+      ],
+      'ytmusic': [
+        path.join(localAppData, 'Programs', 'youtube-music', 'YouTube Music.exe'),
+        'ytmusic://',
+        'https://music.youtube.com',
+      ],
+      'calculator': [
+        'calc.exe',
+        'calculator:',
+      ],
+      'vscode': [
+        'code',
+        path.join(localAppData, 'Programs', 'Microsoft VS Code', 'Code.exe'),
+        'C:\\Program Files\\Microsoft VS Code\\Code.exe',
+      ],
+      'terminal': [
+        'powershell.exe',
+        'wt.exe',
+        'cmd.exe',
+      ],
+    };
+
+    const targetKey = pathOrExe.toLowerCase().trim();
+    if (appAliases[targetKey]) {
+      const candidates = appAliases[targetKey];
+      for (const cand of candidates) {
+        if (cand.startsWith('http://') || cand.startsWith('https://') || cand.includes('://') || cand.endsWith(':')) {
+          try {
+            await shell.openExternal(cand);
+            return { success: true };
+          } catch (_) {}
+        } else {
+          const exePath = cand.split(' ')[0];
+          if (fs.existsSync(exePath) || !exePath.includes('\\')) {
+            exec(`cmd.exe /c start "" "${cand}"`);
+            return { success: true };
+          }
+        }
+      }
+    }
+
+    if (pathOrExe.startsWith('http://') || pathOrExe.startsWith('https://') || pathOrExe.includes('://') || pathOrExe.endsWith(':')) {
       await shell.openExternal(pathOrExe);
     } else {
-      const { exec } = await import('child_process');
-      exec(`"${pathOrExe}"`);
+      exec(`cmd.exe /c start "" "${pathOrExe}"`);
     }
     return { success: true };
   } catch (err: any) {

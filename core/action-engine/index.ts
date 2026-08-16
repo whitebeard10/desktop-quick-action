@@ -57,30 +57,36 @@ export class ActionEngine {
   }
 
   private async executeCommand(command: string, metadata?: Record<string, any>): Promise<{ success: boolean; message?: string }> {
-    switch (command) {
-      case 'mute_audio':
-        eventBus.emit('NOTIFICATION_RECEIVED', {
-          id: Date.now().toString(),
-          type: 'info',
-          title: 'System Mute',
-          message: 'Audio toggled',
-          timestamp: Date.now(),
-          read: false,
-        });
-        return { success: true, message: 'Toggled system mute' };
-      case 'take_screenshot':
-        eventBus.emit('NOTIFICATION_RECEIVED', {
-          id: Date.now().toString(),
-          type: 'success',
-          title: 'Screenshot Captured',
-          message: 'Saved to Clipboard',
-          timestamp: Date.now(),
-          read: false,
-        });
-        return { success: true, message: 'Screenshot captured' };
-      default:
-        return { success: true, message: `Executed command ${command}` };
+    const api = (window as any).electronAPI;
+    if (command === 'mute_audio') {
+      if (api?.launchApp) await api.launchApp('mute_audio');
+      eventBus.emit('NOTIFICATION_RECEIVED', {
+        id: Date.now().toString(),
+        type: 'info',
+        title: 'System Mute',
+        message: 'Master audio mute toggled',
+        timestamp: Date.now(),
+        read: false,
+      });
+      return { success: true, message: 'Toggled system mute' };
     }
+    if (command === 'take_screenshot') {
+      if (api?.launchApp) await api.launchApp('take_screenshot');
+      eventBus.emit('NOTIFICATION_RECEIVED', {
+        id: Date.now().toString(),
+        type: 'success',
+        title: 'Screen Capture',
+        message: 'Snipping Tool launched',
+        timestamp: Date.now(),
+        read: false,
+      });
+      return { success: true, message: 'Screen capture launched' };
+    }
+    if (command === 'lock_system') {
+      if (api?.launchApp) await api.launchApp('lock_system');
+      return { success: true, message: 'Windows workstation locked' };
+    }
+    return { success: true, message: `Executed command ${command}` };
   }
 }
 

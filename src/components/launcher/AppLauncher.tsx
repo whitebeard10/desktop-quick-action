@@ -8,6 +8,8 @@ import {
   Gamepad2, 
   MessageSquare, 
   Music, 
+  Music2,
+  Calculator,
   Palette, 
   Pin, 
   Trash2, 
@@ -39,6 +41,8 @@ export const AppLauncher: React.FC = () => {
       case 'Gamepad2': return <Gamepad2 className="w-5 h-5" />;
       case 'MessageSquare': return <MessageSquare className="w-5 h-5" />;
       case 'Music': return <Music className="w-5 h-5" />;
+      case 'Music2': return <Music2 className="w-5 h-5" />;
+      case 'Calculator': return <Calculator className="w-5 h-5" />;
       case 'Palette': return <Palette className="w-5 h-5" />;
       default: return <Globe className="w-5 h-5" />;
     }

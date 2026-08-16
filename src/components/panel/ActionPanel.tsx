@@ -187,18 +187,18 @@ export const ActionPanel: React.FC = () => {
           </button>
 
           <button
-            onClick={() => actionEngine.execute({ type: 'launch_app', target: 'powershell.exe' })}
+            onClick={() => actionEngine.execute({ type: 'launch_app', target: 'terminal' })}
             className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center gap-1.5 text-xs text-slate-300 hover:text-white transition-all"
-            title="Open PowerShell"
+            title="Open Interactive Terminal"
           >
             <Terminal className="w-3.5 h-3.5 text-emerald-400" />
             <span>Terminal</span>
           </button>
 
           <button
-            onClick={() => actionEngine.execute({ type: 'launch_app', target: 'cmd.exe' })}
+            onClick={() => actionEngine.execute({ type: 'execute_command', target: 'lock_system' })}
             className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center gap-1.5 text-xs text-slate-300 hover:text-white transition-all"
-            title="Lock Windows"
+            title="Lock Windows Workstation"
           >
             <Lock className="w-3.5 h-3.5 text-purple-400" />
             <span>Lock</span>
