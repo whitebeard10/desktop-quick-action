@@ -90,6 +90,43 @@ npm run build
 
 ---
 
+## Adding Custom Applications & Shortcuts
+
+You can easily add custom desktop applications, executable files, web shortcuts, or scripts to the App Launcher grid:
+
+### Option A: Via the In-App Modal (Recommended)
+1. Open Desktop Action Hub (`Ctrl + Space`).
+2. Go to the **App Launcher** tab.
+3. Click the green **`+ Add App`** button in the upper right.
+4. Fill in the modal fields:
+   - **Title**: Display name (e.g., *Photoshop*, *Spotify*, *GitHub Desktop*).
+   - **Executable Path or URL**:
+     - For Desktop Apps: Full executable path (e.g. `C:\Program Files\Adobe\Photoshop.exe` or `calc.exe`).
+     - For Web Apps: Full website URL (e.g. `https://github.com`).
+     - For Protocols: Custom URI protocol (e.g. `discord:`, `spotify:`, `calculator:`).
+   - **Type**: Select `EXE / Application`, `Website URL`, `Folder`, or `Script`.
+   - **Category**: Assign to `Work`, `Development`, `Media`, `Gaming`, or `Utilities`.
+5. Click **Save App**. The new shortcut appears in the grid and is automatically persisted.
+
+### Option B: Modifying Default App Presets
+To edit default application presets for all fresh installations, edit the `INITIAL_APPS` array in `src/store/useAppStore.ts`:
+
+```typescript
+{
+  id: 'a-my-app',
+  title: 'My Desktop App',
+  icon: 'Code2', // Any Lucide React icon name
+  pathOrUrl: 'C:\\Program Files\\App\\app.exe', // Or URL / alias
+  type: 'exe',
+  category: 'Development',
+  isPinned: true,
+  launchCount: 0,
+  profileId: 'p-work'
+}
+```
+
+---
+
 ## Project Structure
 
 ```

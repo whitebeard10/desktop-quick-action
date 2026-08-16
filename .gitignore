@@ -39,3 +39,6 @@ pnpm-debug.log*
 # Misc
 *.log
 .cache/
+HANDOVER.md
+*.handover.md
+
