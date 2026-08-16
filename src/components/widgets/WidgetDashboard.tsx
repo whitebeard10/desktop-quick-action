@@ -38,7 +38,8 @@ export const WidgetDashboard: React.FC = () => {
     }
   };
 
-  const activeTypes = activeProfile.activeWidgets;
+  // activeWidgets stores IDs like 'w-weather'; switch cases expect bare types like 'weather'
+  const activeTypes = activeProfile.activeWidgets.map((id) => id.replace(/^w-/, ''));
 
   return (
     <div className="space-y-3 p-1 max-h-[500px] overflow-y-auto pr-1">
