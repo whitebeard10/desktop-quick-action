@@ -269,51 +269,51 @@ ipcMain.handle('app:launch', async (_: any, pathOrExe: string) => {
     }
 
     // Smart aliases for common Windows applications
-    const localAppData = process.env['LOCALAPPDATA'] || '';
-    const appAliases: Record<string, string[]> = {
-      'discord': [
-        path.join(localAppData, 'Discord', 'Update.exe') + ' --processStart Discord.exe',
-        'discord://',
-        'https://discord.com/app',
-      ],
-      'ytmusic': [
-        path.join(localAppData, 'Programs', 'youtube-music', 'YouTube Music.exe'),
-        'ytmusic://',
-        'https://music.youtube.com',
-      ],
-      'calculator': [
-        'calc.exe',
-        'calculator:',
-      ],
-      'vscode': [
-        'code',
-        path.join(localAppData, 'Programs', 'Microsoft VS Code', 'Code.exe'),
-        'C:\\Program Files\\Microsoft VS Code\\Code.exe',
-      ],
-      'terminal': [
-        'powershell.exe',
-        'wt.exe',
-        'cmd.exe',
-      ],
+    const localAppData = process.env['LOCALAPPDATA'] || 'C:\\Users\\' + os.userInfo().username + '\\AppData\\Local';
+    const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+    const discordUpdateExe = path.join(localAppData, 'Discord', 'Update.exe');
+
+    const appAliases: Record<string, () => void> = {
+      'discord': () => {
+        if (fs.existsSync(discordUpdateExe)) {
+          exec(`cmd.exe /c start "" "${discordUpdateExe}" --processStart Discord.exe`);
+        } else {
+          shell.openExternal('discord://').catch(() => {
+            shell.openExternal('https://discord.com/app');
+          });
+        }
+      },
+      'ytmusic': () => {
+        const ytExe = path.join(localAppData, 'Programs', 'youtube-music', 'YouTube Music.exe');
+        if (fs.existsSync(ytExe)) {
+          exec(`cmd.exe /c start "" "${ytExe}"`);
+        } else {
+          shell.openExternal('https://music.youtube.com');
+        }
+      },
+      'calculator': () => {
+        exec('cmd.exe /c start calc.exe');
+      },
+      'vscode': () => {
+        const userCode = path.join(localAppData, 'Programs', 'Microsoft VS Code', 'Code.exe');
+        const sysCode = path.join(programFiles, 'Microsoft VS Code', 'Code.exe');
+        if (fs.existsSync(userCode)) {
+          exec(`cmd.exe /c start "" "${userCode}"`);
+        } else if (fs.existsSync(sysCode)) {
+          exec(`cmd.exe /c start "" "${sysCode}"`);
+        } else {
+          exec('cmd.exe /c start code');
+        }
+      },
+      'terminal': () => {
+        exec('cmd.exe /c start powershell.exe');
+      },
     };
 
     const targetKey = pathOrExe.toLowerCase().trim();
     if (appAliases[targetKey]) {
-      const candidates = appAliases[targetKey];
-      for (const cand of candidates) {
-        if (cand.startsWith('http://') || cand.startsWith('https://') || cand.includes('://') || cand.endsWith(':')) {
-          try {
-            await shell.openExternal(cand);
-            return { success: true };
-          } catch (_) {}
-        } else {
-          const exePath = cand.split(' ')[0];
-          if (fs.existsSync(exePath) || !exePath.includes('\\')) {
-            exec(`cmd.exe /c start "" "${cand}"`);
-            return { success: true };
-          }
-        }
-      }
+      appAliases[targetKey]();
+      return { success: true };
     }
 
     if (pathOrExe.startsWith('http://') || pathOrExe.startsWith('https://') || pathOrExe.includes('://') || pathOrExe.endsWith(':')) {

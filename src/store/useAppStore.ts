@@ -300,10 +300,35 @@ interface AppState {
   initEngines: () => void;
 }
 
+const getInitialApps = (): AppItem[] => {
+  const stored = repository.getItem<AppItem[]>('apps', []);
+  if (!stored || stored.length === 0) return INITIAL_APPS;
+
+  const existingIds = new Set(stored.map((a) => a.id));
+  const missingDefaults = INITIAL_APPS.filter((a) => !existingIds.has(a.id));
+
+  const updatedStored = stored.map((app) => {
+    if (app.id === 'a-discord' && (app.pathOrUrl.includes('discord.com') || app.type === 'url')) {
+      return { ...app, pathOrUrl: 'discord', type: 'exe' as const };
+    }
+    if (app.id === 'a-vscode' && app.pathOrUrl.includes('avina')) {
+      return { ...app, pathOrUrl: 'vscode' };
+    }
+    if (app.id === 'a-terminal' && app.pathOrUrl === 'powershell.exe') {
+      return { ...app, pathOrUrl: 'terminal' };
+    }
+    return app;
+  });
+
+  const merged = [...updatedStored, ...missingDefaults];
+  repository.setItem('apps', merged);
+  return merged;
+};
+
 export const useAppStore = create<AppState>((set, get) => ({
   activeProfile: repository.getItem('activeProfile', INITIAL_PROFILES[0]),
   profiles: repository.getItem('profiles', INITIAL_PROFILES),
-  apps: repository.getItem('apps', INITIAL_APPS),
+  apps: getInitialApps(),
   widgets: repository.getItem('widgets', INITIAL_WIDGETS),
   theme: repository.getItem('theme', THEME_PRESETS.Glass),
   settings: repository.getItem('settings', {
