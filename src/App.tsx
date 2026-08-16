@@ -1,30 +1,59 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FloatingBubble } from './components/bubble/FloatingBubble';
 import { ActionPanel } from './components/panel/ActionPanel';
 import { useAppStore } from './store/useAppStore';
+import { windowManager, PanelLayoutState } from '@core/window-manager';
+import { eventBus } from '@core/event-bus';
 
 export const App: React.FC = () => {
-  const { initEngines } = useAppStore();
+  const { initEngines, isPanelOpen } = useAppStore();
+  const [layout, setLayout] = useState<PanelLayoutState>(windowManager.getLayoutState());
 
   useEffect(() => {
     initEngines();
   }, [initEngines]);
 
+  useEffect(() => {
+    const unsub = eventBus.on('PANEL_LAYOUT_CHANGED', (newLayout: PanelLayoutState) => {
+      setLayout(newLayout);
+    });
+    return () => unsub();
+  }, []);
+
   return (
-    // Full-screen transparent overlay — pointer-events: none so the background
-    // passes all clicks through to the desktop. Bubble + panel have pointer-events: auto.
     <div
       style={{
-        position: 'fixed',
-        inset: 0,
-        pointerEvents: 'none',
+        width: '100vw',
+        height: '100vh',
+        minWidth: '100%',
+        minHeight: '100%',
+        background: 'transparent',
+        position: 'relative',
         overflow: 'hidden',
         userSelect: 'none',
-        background: 'transparent',
       }}
     >
-      <FloatingBubble />
-      <ActionPanel />
+      <div
+        style={{
+          position: 'absolute',
+          left: isPanelOpen ? layout.bubbleRelX : 0,
+          top: isPanelOpen ? layout.bubbleRelY : 0,
+        }}
+      >
+        <FloatingBubble />
+      </div>
+
+      {isPanelOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            left: layout.panelRelX,
+            top: layout.panelRelY,
+          }}
+        >
+          <ActionPanel />
+        </div>
+      )}
     </div>
   );
 };

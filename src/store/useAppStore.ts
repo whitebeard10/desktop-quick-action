@@ -300,7 +300,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   searchResults: [],
   unreadNotificationCount: 2,
   notifications: notificationManager.getNotifications(),
-  isPanelOpen: false,
+  isPanelOpen: true,
 
   setActiveProfile: (profileId: string) => {
     const profile = get().profiles.find((p) => p.id === profileId);
@@ -337,11 +337,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isPanelOpen: nextState });
 
     windowManager.setPanelOpen(nextState);
-
-    // Notify main process: panel open = disable pass-through even on cursor:default elements
-    if ((window as any).electronAPI?.setPanelOpen) {
-      (window as any).electronAPI.setPanelOpen(nextState);
-    }
 
     if (nextState) {
       bubbleFSM.transitionTo('expanded');

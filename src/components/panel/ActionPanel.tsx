@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Rocket, 
@@ -27,7 +27,6 @@ import { SettingsPanel } from '../settings/SettingsPanel';
 import { actionEngine } from '@core/action-engine';
 import { springPresets } from '@core/animation-system';
 import { windowManager } from '@core/window-manager';
-import { eventBus } from '@core/event-bus';
 
 export type PanelTab = 'launcher' | 'widgets' | 'search' | 'profiles' | 'themes' | 'settings';
 
@@ -50,65 +49,85 @@ export const ActionPanel: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<PanelTab>('launcher');
   const [showNotifications, setShowNotifications] = useState(false);
-  const [bubblePos, setBubblePos] = useState(windowManager.getPosition());
+  const [isHeaderDragging, setIsHeaderDragging] = useState(false);
 
-  const isElectron = Boolean((window as any).electronAPI);
+  const headerDragRef = useRef<{
+    startX: number;
+    startY: number;
+    winStartPos: { x: number; y: number };
+  } | null>(null);
 
+  // Notify WindowManager when panel state changes so it can resize the OS window
   useEffect(() => {
-    const handler = (pos: { x: number; y: number }) => setBubblePos({ ...pos });
-    eventBus.on('WINDOW_POSITION_CHANGED', handler);
-    return () => eventBus.off('WINDOW_POSITION_CHANGED', handler);
-  }, []);
+    windowManager.setPanelOpen(isPanelOpen);
+  }, [isPanelOpen]);
 
-  // Smart placement: open panel to the left of bubble if near right edge, else right
-  const screenBounds = windowManager.getScreenBounds();
-  const bubbleSize = settings.bubbleSize;
-  const spaceRight = screenBounds.width - (bubblePos.x + bubbleSize);
-  const panelX = spaceRight >= PANEL_W + GAP
-    ? bubblePos.x + bubbleSize + GAP
-    : Math.max(0, bubblePos.x - PANEL_W - GAP);
-  // Vertically align panel top with bubble, clamp to screen
-  const panelY = Math.min(bubblePos.y, Math.max(0, screenBounds.height - PANEL_H - GAP));
+  const handleHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const pos = windowManager.getPosition();
+    headerDragRef.current = {
+      startX: e.screenX,
+      startY: e.screenY,
+      winStartPos: { ...pos },
+    };
+    setIsHeaderDragging(true);
+  };
+
+  const handleHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!headerDragRef.current) return;
+    const dx = e.screenX - headerDragRef.current.startX;
+    const dy = e.screenY - headerDragRef.current.startY;
+    windowManager.setPosition({
+      x: headerDragRef.current.winStartPos.x + dx,
+      y: headerDragRef.current.winStartPos.y + dy,
+    }, false);
+  };
+
+  const handleHeaderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!headerDragRef.current) return;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch (_) {}
+    headerDragRef.current = null;
+    setIsHeaderDragging(false);
+  };
 
   if (!isPanelOpen) return null;
 
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, scale: 0.92, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.92, y: 10 }}
+        initial={{ opacity: 0, scale: 0.92, x: -10 }}
+        animate={{ opacity: 1, scale: 1, x: 0 }}
+        exit={{ opacity: 0, scale: 0.92, x: -10 }}
         transition={springPresets.snappy}
         style={{
-          position: 'fixed',
-          left: panelX,
-          top: panelY,
           width: PANEL_W,
-          maxHeight: PANEL_H,
-          zIndex: 9990,
-          pointerEvents: 'auto',
-          backgroundColor: theme.bgGlass,
+          height: PANEL_H,
+          flexShrink: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.96)',
           borderColor: theme.borderGlass,
-          backdropFilter: `blur(${theme.blurIntensity}px)`,
-          WebkitBackdropFilter: `blur(${theme.blurIntensity}px)`,
-          boxShadow: theme.shadowDepth,
+          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
         }}
         className="relative rounded-3xl border p-4 text-slate-100 flex flex-col gap-3 overflow-hidden shadow-2xl"
       >
-        {/* Header Bar */}
+        {/* Header Bar — draggable via pointer events so user can drag the whole window while panel is open */}
         <div
-          className="flex items-center justify-between border-b border-white/10 pb-3 cursor-grab active:cursor-grabbing"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+          className="flex items-center justify-between border-b border-white/10 pb-3 select-none"
+          style={{ cursor: isHeaderDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+          onPointerDown={handleHeaderPointerDown}
+          onPointerMove={handleHeaderPointerMove}
+          onPointerUp={handleHeaderPointerUp}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" onPointerDown={(e) => e.stopPropagation()}>
             <span
               className="px-2.5 py-1 rounded-full text-xs font-extrabold flex items-center gap-1.5 shadow"
               style={{
                 backgroundColor: `${activeProfile.accentColor}33`,
                 color: activeProfile.accentColor,
                 border: `1px solid ${activeProfile.accentColor}55`,
-                WebkitAppRegion: 'no-drag',
-              } as React.CSSProperties}
+              }}
             >
               {activeProfile.name}
             </span>
@@ -116,7 +135,7 @@ export const ActionPanel: React.FC = () => {
 
           <div
             className="flex items-center gap-1.5"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            onPointerDown={(e) => e.stopPropagation()}
           >
             {/* Notification Drawer Toggle */}
             <button
@@ -145,7 +164,10 @@ export const ActionPanel: React.FC = () => {
         </div>
 
         {/* Quick Actions Toolbar */}
-        <div className="grid grid-cols-4 gap-2 py-1">
+        <div
+          className="grid grid-cols-4 gap-2 py-1"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
           <button
             onClick={() => actionEngine.execute({ type: 'execute_command', target: 'mute_audio' })}
             className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center gap-1.5 text-xs text-slate-300 hover:text-white transition-all"
@@ -184,7 +206,10 @@ export const ActionPanel: React.FC = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-1 bg-white/5 p-1 rounded-2xl border border-white/5">
+        <div
+          className="flex items-center gap-1 bg-white/5 p-1 rounded-2xl border border-white/5"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
           {[
             { id: 'launcher', label: 'Launcher', icon: Rocket },
             { id: 'widgets', label: 'Widgets', icon: LayoutGrid },
@@ -213,7 +238,10 @@ export const ActionPanel: React.FC = () => {
         </div>
 
         {/* Tab Content Rendering */}
-        <div className="relative min-h-[380px] pt-1">
+        <div
+          className="relative min-h-[380px] pt-1"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
           {activeTab === 'launcher' && <AppLauncher />}
           {activeTab === 'widgets' && <WidgetDashboard />}
           {activeTab === 'search' && <UniversalSearch />}
@@ -230,6 +258,7 @@ export const ActionPanel: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               className="absolute inset-x-4 top-16 z-50 p-4 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-white/20 shadow-2xl space-y-3"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
               <div className="flex items-center justify-between border-b border-white/10 pb-2">
                 <span className="text-xs font-bold text-white flex items-center gap-1.5">

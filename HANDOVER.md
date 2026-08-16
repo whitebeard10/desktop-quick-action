@@ -12,51 +12,21 @@ A Windows desktop overlay app (Electron + React + Vite) that shows a small float
 
 ## Current State of the Codebase
 
-### Architecture (as of last commit)
-The app currently uses a **full-screen transparent overlay** approach:
-- Electron window: `x:0, y:0, width:screenWidth, height:screenHeight`, transparent, frameless, always-on-top
-- Bubble positioned via `position: fixed; left: pos.x; top: pos.y` CSS
-- Panel positioned via `position: fixed` with smart left/right placement near bubble
-- Pass-through for desktop interaction via `setIgnoreMouseEvents(true, { forward: true })`
-- Pass-through toggled in **main process** using `webContents.on('cursor-changed')` event
+## Current Architecture & Resolution
 
-### What Works
-- ✅ App launches and renders correctly
-- ✅ Bubble appears at right edge, vertically centered
-- ✅ Hover effect on bubble registers (glow, scale)
-- ✅ Cursor-based pass-through detection (main process `cursor-changed` event)
-- ✅ Panel open/close IPC (`panel:state-changed`) so cursor:default text labels don't re-enable pass-through accidentally
-- ✅ Build compiles cleanly (1974 modules)
-- ✅ Git pushed to `github.com/whitebeard10/desktop-quick-action`
+### Exact-Fit OS Window + Pointer Drag Architecture (IMPLEMENTED)
 
-### Current Bugs / Unresolved Issues
-1. **Desktop clicks are blocked** — The full-screen transparent window blocks all desktop interaction (clicking icons, taskbar, other apps). The `cursor-changed` + `setIgnoreMouseEvents` approach is supposed to fix this but the user reports it still blocks.
-2. **Clicking the bubble is unreliable** — Even though hover registers, actually clicking the bubble sometimes doesn't work due to Electron's `setIgnoreMouseEvents` race conditions.
-3. **Position drift when dragging** — May still have minor drift depending on render timing.
+1. **Exact-Fit BrowserWindow**:
+   - Initial window size is exactly 56x56 (`bubbleSize`).
+   - 0% of desktop is covered or blocked when panel is closed.
+   - When panel opens, window resizes to 524x680 (`bubbleSize + GAP + PANEL_W`, `PANEL_H`) and repositions dynamically to keep everything on-screen.
 
----
-
-## Why the Current Architecture Has Problems
-
-```
-Full-screen transparent window (1920×1080)
-│
-├── setIgnoreMouseEvents(true, {forward:true}) = transparent areas pass through
-├── cursor-changed event in main = toggles ignore off when cursor is 'grab'/'pointer'
-│
-└── Problems:
-    ├── cursor-changed may not fire reliably on all systems
-    ├── Race condition: cursor:default text in panel re-enables pass-through briefly
-    └── If setIgnoreMouseEvents gets stuck, entire desktop becomes unclickable
-```
-
----
-
-## The Agreed Better Architecture (NOT YET IMPLEMENTED)
-
-### Core Idea: Exact-Fit OS Window + Native OS Dragging
-
-**Go back to a small, properly-sized window — but fix the dragging.**
+2. **Pointer Drag & Click Handling**:
+   - Replaced unreliable `WebkitAppRegion: 'drag'` (which intercepted Win32 NCHITTEST and broke React click/hover events on Windows) with pointer capture screen-coordinate tracking.
+   - Pointer down records initial screen coordinates (`e.screenX`, `e.screenY`) and OS window position.
+   - Pointer move updates window position in real-time using high-speed 1-way IPC (`window:move`).
+   - Drag distance threshold (< 4px) distinguishes between a click (opens/closes Action Panel) and a drag (moves window across screen + snaps to edge).
+   - ActionPanel header bar also supports pointer drag to move the panel when open.
 
 ```
 State 1 — Bubble only:              State 2 — Panel open:

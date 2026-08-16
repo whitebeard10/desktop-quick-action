@@ -4,13 +4,13 @@ import os from 'os';
 import zlib from 'zlib';
 import fs from 'fs';
 
-// Work around GPU process crashes on some Windows systems (exit_code=-1073741819 / 0xC0000005).
-// --disable-gpu forces software rendering, which is required for transparent windows
-// on systems where the GPU process crashes.
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('enable-transparent-visuals');
-app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
-app.commandLine.appendSwitch('disable-http-cache');
+// Custom switches to prevent GPU shader disk cache errors on Windows
+try {
+  app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+  app.commandLine.appendSwitch('disable-http-cache');
+} catch (e) {
+  console.warn('Could not set command line switches:', e);
+}
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -120,10 +120,12 @@ function toggleWindowVisibility() {
 
 function createWindow() {
   const possiblePreloadPaths = [
+    path.join(__dirname, '../preload/preload.cjs'),
+    path.join(__dirname, 'preload.cjs'),
     path.join(__dirname, '../preload/preload.mjs'),
     path.join(__dirname, 'preload.mjs'),
-    path.join(__dirname, 'preload.cjs'),
     path.join(__dirname, 'preload.js'),
+    path.join(app.getAppPath(), 'out/preload/preload.cjs'),
     path.join(app.getAppPath(), 'out/preload/preload.mjs'),
     path.join(app.getAppPath(), 'dist-electron/preload.cjs'),
   ];
@@ -132,23 +134,50 @@ function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
+  const initialWidth = 524; // 56 + 8 + 460
+  const initialHeight = 680;
+  const defaultX = Math.max(50, Math.floor((screenWidth - initialWidth) / 2));
+  const defaultY = Math.max(50, Math.floor((screenHeight - initialHeight) / 2));
+
   mainWindow = new BrowserWindow({
-    x: 0,
-    y: 0,
-    width: screenWidth,
-    height: screenHeight,
+    x: defaultX,
+    y: defaultY,
+    width: initialWidth,
+    height: initialHeight,
     frame: false,
     transparent: true,
+    backgroundColor: '#00000000',
     alwaysOnTop: true,
     resizable: false,
-    skipTaskbar: true,
-    show: false,
+    skipTaskbar: false,
+    show: true,
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
+
+  mainWindow.once('ready-to-show', () => {
+    if (!mainWindow) return;
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  });
+
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    console.log(`[Renderer Log ${level}] ${message} (${sourceId}:${line})`);
+  });
+
+  // Track window movement to notify renderer of position changes
+  const notifyPositionChanged = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const [x, y] = mainWindow.getPosition();
+    mainWindow.webContents.send('window:position-changed', { x, y });
+  };
+  mainWindow.on('moved', notifyPositionChanged);
+  mainWindow.on('move', notifyPositionChanged);
 
   // electron-vite sets ELECTRON_RENDERER_URL in dev mode
   const devServerUrl = process.env['ELECTRON_RENDERER_URL']
@@ -171,59 +200,10 @@ function createWindow() {
     }
   }
 
-  // Show window once content is painted — with a timeout fallback
-  // Track whether pass-through is currently enabled to avoid redundant calls
-  let ignoreMouseEvents = true;
-  let panelOpen = false;
-
-  const applyIgnore = (ignore: boolean) => {
-    if (ignore === ignoreMouseEvents || !mainWindow) return;
-    ignoreMouseEvents = ignore;
-    if (ignore) {
-      mainWindow.setIgnoreMouseEvents(true, { forward: true });
-    } else {
-      mainWindow.setIgnoreMouseEvents(false);
-    }
-  };
-
-  // cursor-changed fires in the MAIN PROCESS whenever Chromium changes cursor style.
-  // This is synchronous relative to mouse processing — no IPC round-trip race condition.
-  // Bubble has cursor:grab, panel buttons have cursor:pointer.
-  // Transparent overlay has cursor:default → re-enable pass-through.
-  mainWindow.webContents.on('cursor-changed', (_event, type) => {
-    if (panelOpen) {
-      // Panel is open: full interaction mode regardless of cursor
-      applyIgnore(false);
-      return;
-    }
-    // Any non-default/non-none cursor means we're over an interactive element
-    const interactive = type !== 'default' && type !== 'none';
-    applyIgnore(!interactive);
-  });
-
-  // Track panel state so cursor:default elements inside the panel don't re-enable pass-through
-  ipcMain.on('panel:state-changed', (_event, open: boolean) => {
-    panelOpen = open;
-    if (open) {
-      applyIgnore(false);
-    } else {
-      applyIgnore(true);
-    }
-  });
-
-  // in case GPU issues prevent 'ready-to-show' from firing.
-  let shown = false;
-  const showWindow = () => {
-    if (shown || !mainWindow) return;
-    shown = true;
-    mainWindow.show();
-    mainWindow.focus();
-    mainWindow.setAlwaysOnTop(true, 'screen-saver');
-    // Start as click-through; cursor-changed will disable pass-through over the bubble
-    mainWindow.setIgnoreMouseEvents(true, { forward: true });
-  };
-  mainWindow.once('ready-to-show', showWindow);
-  setTimeout(showWindow, 1000); // fallback: force show after 1s
+  // Ensure window is brought to top and focused
+  mainWindow.show();
+  mainWindow.focus();
+  console.log(`[Desktop Action Hub] Window created at (${defaultX}, ${defaultY})`);
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     console.error('[Window] Renderer crashed:', details.reason, details.exitCode);
@@ -306,20 +286,27 @@ ipcMain.handle('system:screen-bounds', () => {
 });
 
 ipcMain.handle('window:get-position', () => {
-  // Now returns screen bounds so renderer can calculate initial bubble position
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.workAreaSize;
-  return { screenWidth: width, screenHeight: height };
+  if (!mainWindow || mainWindow.isDestroyed()) return { x: 100, y: 100 };
+  const [x, y] = mainWindow.getPosition();
+  return { x, y };
 });
 
-// Renderer calls this when mouse enters/leaves the bubble or panel
-ipcMain.on('window:set-ignore-mouse-events', (_: any, ignore: boolean) => {
+// Fast 1-way window movement for smooth dragging
+ipcMain.on('window:move', (_: any, x: number, y: number) => {
   if (!mainWindow) return;
-  if (ignore) {
-    mainWindow.setIgnoreMouseEvents(true, { forward: true });
-  } else {
-    mainWindow.setIgnoreMouseEvents(false);
-  }
+  mainWindow.setPosition(Math.round(x), Math.round(y));
+});
+
+// Move the OS window to an absolute screen position (2-way invoke)
+ipcMain.handle('window:move', (_: any, x: number, y: number) => {
+  if (!mainWindow) return;
+  mainWindow.setPosition(Math.round(x), Math.round(y));
+});
+
+// Resize the OS window (used when panel opens/closes)
+ipcMain.handle('window:set-size', (_: any, width: number, height: number) => {
+  if (!mainWindow) return;
+  mainWindow.setSize(Math.round(width), Math.round(height));
 });
 
 ipcMain.handle('window:minimize', () => { mainWindow?.minimize(); });
